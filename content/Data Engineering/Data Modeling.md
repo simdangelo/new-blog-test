@@ -1,12 +1,13 @@
 ---
 date: 2024-11-16
-modified: 2024-11-17T22:40:51+01:00
+modified: 2024-11-19T23:59:24+01:00
 ---
 
 Here are some notes on one of the most important topics in Data Engineering: **Data Modeling**. I collected these notes (an pictures too!) from different sources and will keep adding more as I use new ones. For now, the sources are:
 * ***Fundamentals of Data Engineering*** book (by Joe Reis & Matt Housely)
 * ***Deciphering Data Architecture*** book (by James Serra)
-* [Learn Database Normalization - 1NF, 2NF, 3NF, 4NF, 5NF](https://www.youtube.com/watch?v=GFQaEYEc8_8&t=125s&ab_channel=Decomplexify) video on YouTube (by Decomplexify channel)
+* [Learn Database Normalization - 1NF, 2NF, 3NF, 4NF, 5NF](https://www.youtube.com/watch?v=GFQaEYEc8_8&t=125s&ab_channel=Decomplexify) video on YouTube (by *Decomplexify* channel)
+* [Data warehouse schema design - dimensional modeling and star schema](https://www.youtube.com/watch?v=fpquGrdgbLg&t=1345s&ab_channel=SnirDavid-dev) video on YouTube (by *Snir David - Dev* channel)
 # Introduction
 >[!definition]
 > **Data Modeling** is a high-level conceptual technique used to design a database. This process involves identifying how the data must be structured and standardized to best reflect the organizations' processes, specifically how data that needs to be stored, and then creating a structured representation of that data and the relationships among the data.
@@ -158,7 +159,8 @@ Let's analyze our non-key attributes:
 	where the arrow signifies a **dependency**, or better a **functional dependency**. This simply means that each value of the thing on the left of the arrow is associated with exactly one value of the thing on the right side of the arrow. As far as 2NF is concerned, this dependency is fine because it's a dependency on the entire primary key.
 + does `Player_Rating` depend on the entire primary key? No, because it's a property of `Player_ID` only. In other words, for any given player, there's one `Player_Rating`:
 	![](Data%20Engineering/attachments/Pasted%20image%2020241117213433.png)
-	This dependency on `Player_ID` is the problem because `Player_ID` is part of the primary key, but it's not the whole key. That's why the table isn't in Second Normal Form and why it's vulnerable to problems.
+	This dependency on `Player_ID` is the problem because `Player_ID` is part of the primary key, but it's not the whole key. That's why the table isn't in Second Normal Form and why it's vulnerable to problems. This dependency is called **Partial Dependency**: a partial dependency is a non-key column that is fully determined by a subset of the columns in the unique primary composite key (partial dependencies can occur only when the primary key is composite).
+
 
 The design of this database went wrong when we chose to add a `Player_Rating` column to a table where it didn't really belong. The fact that a `Player_Rating` is a property of a player should have helped us to realize that a player is an important concept in its own right. So, `Player_ID` deserves its own table, which will contain one row per player, and in it we can include as columns the ID of the player, the rating of the player, the rating of the player, and so on:
 ![](Data%20Engineering/attachments/Pasted%20image%2020241117214532.png)
@@ -197,3 +199,155 @@ If you keep these rules in ming, then the 99% of the time you will end up with *
 In practice the difference between BCNF and 3NF is extremely small and the chances of you ever encountering a real-life 3NF table that doesn't meet BCNF are almost zero. Any such table would have to have what we call multiple overlapping candidate keys - which gets us into realms of obscurity and theoretical rigor that are little beyond the scope of this lesson. So, as a practical matter, just follow the guideline of **Boyce-Codd Normal Form** and you can be confident that the table will be in both 3NF and BCNF.
 
 In almost all cases, once you've normalized a table this far, you've **Fully Normalized** it. There are some instances where this level of normalization isn't enough and these rare instance are dealt with by **Fourth** and **Fifth Normal Form** (**4NF** and **5NF**).
+# Dimensional Modeling
+This explanation is taken from [this video](https://www.youtube.com/watch?v=fpquGrdgbLg&t=1345s&ab_channel=SnirDavid-dev) on YouTube.
+
+In this chapter we will go deep into the **Dimensional Modeling** as it originally conceived by the Kimball's book. The contents is targeted at engineers who would like to construct a Data Warehouse and would like an introduction about the terms and how a DW schema should look like and for analyst as well who would like to understand how the DW is constructed ad what are the things people take into consideration when constructing the schema design.
+
+The contents of this chapter come from these three books:
+![](Data%20Engineering/attachments/Pasted%20image%2020241118224407.png)
+
+These are the main books for data modeling and data warehousing design.
+
+What types of DB are we talking about?
+* **OLTP** (**Online Transaction Processing**) Database: it's a day-to-day operational database for your application. That's where day-to-dat transactions of users in your applications happens.
+* **OLAP** (**Online Analytical Processing**) Database: it's the database we want to create for the data warehouse where we do online queries and analysis of business entities.
+
+## Why Dimensional Modeling? OLAP vs OLTP
+Let's highlight the difference between OLAP and OLTP from several points of view.
+##### Data usage rate
++ OLTP databases
+	+ they read one thing at time
+	+ optimized for inserts and updated
+	+ i.e. when an account signs in to your application, you want to read the data for this account specifically, so it's reading only one thing
++ OLAP databases
+	+ they do aggregations and questioning of many things at a time
+	+ optimized for heavy reads
+	+ i.e. when we want to summarize stats for many accounts, not only one
+##### History tracking
+* OLTP databases
+	* uses just the current state
+* OLAP
+	* needs history to track business progression over time
+##### Data Ordering and Structure
+* OLTP
+	* optimal for application use, logical to the developer
+* OLAP
+	* otpimal for business structure, understandable by business people
+##### Data Consistency
++ OLTP
+	+ data might be inconsistent and presented in different logical way to the end user
+	+ we may have multiple fields with same names that have different data in them (*TODO: what does that mean??*)
++ OLAP
+	+ data must be consistent for reports
+	+ there is one and only one fields for a data point that means one thing
+##### Structure for needs
++ OLTP
+	+ the schema structure might fundamentally change for different needs
++ OLAP
+	+ the schema structure should be consistent and flexible for different business needs
+	+ new business questions should not alter the schema in a way that will invalidate old questions work
+## What is a Dimension?
+Think of **Dimension** as "by" what we want to measure things (the who, what, when, where, etc of things). Some examples are things like dates, products, countries. Say we want to measure the amount of purchases the users made; so we want to measure it by how many purchases users made for the product Macbook (so I'm measuring "by" product). Alternatively, we can measure it by how many purchases users made from the USA (so I'm measuring "by" country). So **Dimensions** are things that they measure other things by. Some examples of dimensions tables:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119222220.png)
+
+Note that `country` attribute of the customer is in both the `customer` and `location` tables. This duplication is ok because, when you decide how to design in details your warehouse, you need to make these decisions: do I keep the country in the `customer` dimension or do I need to separate it to its own `location` dimension?
+## What is a Fact?
+A **Fact** is an observation or event or in general something we want to measure (i.e. customer payment, user logins, product orders). Usually fact is something that is a number and very rarely is something text-based because it's something that changes very rapidly (i.e. change over time).
+
+A user login is an event. But we want to measure it against some other parameters. So, let’s say we make sense of it by referring to dimensions. For example, I want to know how many user logins I had in 2020 or how many user logins I had on a Sunday or a specific date. I take the measurement and make sense of it by comparing it to a dimension.
+
+Let’s take a look at the fact table:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119231146.png)
+Facts are just things to be measured. But we make sense of facts in the fact table by combining them with dimensions. For example, in a purchases fact table, we have foreign keys for three dimensions: Customer, Product, and Date. The facts are `price` and `amount`.
+
+Looking at `price` by itself doesn’t mean much. But I can say, "What’s the total price people paid for MacBooks in all of 2020?" Or, “What’s the total price paid by a customer named Neil in 2020?” The result would tell me the total price people paid for MacBooks in that year. Similarly, I can use the `amount` fact to find out how many MacBooks were purchased in 2020.
+
+**Facts make sense only when combined with dimensions in the fact table**. The choice of dimensions to include in the fact table is a key design decision.
+
+Another important point is the difference between facts and dimensions:
+* **Facts** are things that **change rapidly**. For instance, the amount users paid or the quantity of products purchased can change daily, even by the minute.
+* **Dimensions**, on the other hand, are **more stable**. For example, when a customer registers, their name or country doesn’t change frequently. A customer’s name might not change daily, monthly, or even yearly. The country might change, but not often. This distinction is essential for understanding dimensional modeling.
+## Star Schema
+A **Star Schema** is the **combination of a fact table and dimension tables**. Here's an example:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119232325.png)
+For example, in this schema, I have a fact table and dimensions like `date`, `account`, and `platform` in the fact table going to the corresponding dimension tables using foreign keys.
+
+Why is it called a "star" schema? Think about it: the fact table is in the center, and the dimensions radiate outward, forming a star shape. That’s why it’s called a star schema:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119233108.png)
+## Grain of Dimensions
+The **grain** determines what each fact contains and how detailed it is. The grain is defined by the dimensions in the fact table.
+
+For example, in analytics, we might have a dimension for `platform`. Without this dimension, we could measure only total visits per day. But with the platform dimension, we can say, “Yesterday, I had 200 visits in total: 100 from Android, 50 from iOS, and 50 from Desktop.”
+
+The grain also applies to dimension detail. For example, the platform dimension could group visits into just Mobile and Desktop. Or it could break them down further into Android, iOS, Windows, etc. Adding detail to a dimension increases the grain.
+
+Deciding the grain is a business-driven decision. While more detail is usually better, technical constraints may limit how much detail we can store.
+
+Here’s an example of a more complex star schema:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119233612.png)
+In addition to an `active_users_fact` table, we have a `financials_fact` table. The Financials fact table doesn’t connect to the Platform dimension (`platform_dim`) because it doesn’t make sense to measure financials by platform. Financial data like ARR or churn is tied to accounts, not platforms.
+
+This difference highlights how grain varies across fact tables. For Financials, we measure at the account level. For Active Users, we measure at the individual user level.
+## Surrogate Keys
+The primary key for a dimension should be controlled by the OLAP system, not the operational system. Why? Let’s go through the reasons:
+1. **Tracking Changes**: Dimensions can change over time. For example, a customer’s country or age might change. In the operational database, this data is overwritten. But in the data warehouse, we may want to track the history of these changes. We’d add a new row for each change, which means we can’t reuse the operational system’s primary key.
+2. **Multiple Sources**: Dimensions might pull data from different systems. For example, customer data might come from both the operational database and Salesforce. These systems won’t have synchronized primary keys. Using a primary key from one system would require building a complex synchronization process, which is unnecessary.
+3. **Decoupling Systems**: We want to keep the OLAP system independent from the operational system. Using surrogate keys created by the OLAP system ensures this separation.
+## Querying the Star Schema
+Let’s look at an example:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119234918.png)
+Suppose we have a Financials fact table with dimensions for Account, Source, and Date. The facts are `arr` (Annual Recurring Revenue) and `collection` (actual payments received). If we want to group by the user plan of an account and the marketing source (e.g., Facebook ads, Google ads) for May 2020, the result might look like this:
+![](Data%20Engineering/attachments/Pasted%20image%2020241119235012.png)
+The query for this would look like:
+```sql
+SELECT 
+    account.user_plan, 
+    source.name, 
+    SUM(financials_facts.arr)
+FROM 
+    account,
+    source,
+    date,
+    financials_facts
+WHERE 
+    date.month = 5 
+    AND date.year = 2020
+    AND account.id = financials_facts.account
+    AND source.id = financials_facts.source
+    AND date.id = financials_facts.date
+GROUP BY 
+    account.users_plan, 
+    source.name
+```
+
+*(Actually I think a better version of this query is the following one where I made explicit the usage of the joins:*
+```sql
+SELECT 
+    account.user_plan, 
+    source.name, 
+    SUM(financials_facts.arr) AS total_arr
+FROM 
+    account
+JOIN 
+    financials_facts ON accounts.id = financials_facts.account
+JOIN 
+    source ON source.id = financials_facts.source
+JOIN 
+    date ON date.id = financials_facts.date
+WHERE 
+    date.month = 5 
+    AND date.year = 2020
+GROUP BY 
+    account.user_plan, 
+    source.name;
+
+```
+*)*
+
+Star schemas simplify querying, making them powerful for analysis.
+## Slowly Changing Dimensions (SCDs)
+Dimensions often change over time. Here are strategies for handling these changes:
+1. **Type 1**: Overwrite the data. This approach doesn’t track history and works for non-critical dimensions.
+2. **Type 2**: Add a new record for each change and mark the old record as inactive. This is the most common approach.
+3. **Type 3**: Add a column for the previous value. This is rarely used due to limitations (e.g., tracking only one change and increased complexity).
